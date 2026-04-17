@@ -1,0 +1,3 @@
+Force interactive fallback to continue without prompts
+
+This makes interactive fallback use retry_once_silent for non-silent actions so model cycling does not stop due to UI handler decisions.
