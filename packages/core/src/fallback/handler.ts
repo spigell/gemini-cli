@@ -79,7 +79,11 @@ export async function handleFallback(
 
     if (action === 'silent') {
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
-      return processIntent(config, 'retry_always', fallbackModel);
+      // Keep silent fallback non-sticky when we are already at last resort.
+      const silentIntent = selectedPolicy.isLastResort
+        ? 'retry_once'
+        : 'retry_always';
+      return processIntent(config, silentIntent, fallbackModel);
     }
 
     // This will be used in the future when FallbackRecommendation is passed through UI
