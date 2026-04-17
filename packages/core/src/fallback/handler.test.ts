@@ -222,6 +222,42 @@ describe('handleFallback', () => {
       );
     });
 
+    it('wraps to the first chain model from last model in interactive mode', async () => {
+      const flashPreviewPolicy = createDefaultPolicy(PREVIEW_GEMINI_FLASH_MODEL);
+      const flashStablePolicy = createDefaultPolicy(DEFAULT_GEMINI_FLASH_MODEL, {
+        isLastResort: true,
+      });
+      const flashChain = [flashPreviewPolicy, flashStablePolicy];
+      const chainSpy = vi
+        .spyOn(policyHelpers, 'resolvePolicyChain')
+        .mockReturnValue(flashChain);
+
+      try {
+        vi.mocked(policyConfig.isInteractive).mockReturnValue(true);
+        vi.mocked(policyConfig.getModel).mockReturnValue('flash');
+        availability.selectFirstAvailable = vi.fn().mockReturnValue({
+          selectedModel: PREVIEW_GEMINI_FLASH_MODEL,
+          skipped: [],
+        });
+        policyHandler.mockResolvedValue('retry_once');
+
+        const result = await handleFallback(
+          policyConfig,
+          DEFAULT_GEMINI_FLASH_MODEL,
+          AUTH_OAUTH,
+        );
+
+        expect(result).toBe(true);
+        expect(policyHandler).toHaveBeenCalledWith(
+          DEFAULT_GEMINI_FLASH_MODEL,
+          PREVIEW_GEMINI_FLASH_MODEL,
+          undefined,
+        );
+      } finally {
+        chainSpy.mockRestore();
+      }
+    });
+
     it('successfully follows expected availability response for Preview Chain', async () => {
       availability.selectFirstAvailable = vi.fn().mockReturnValue({
         selectedModel: PREVIEW_GEMINI_FLASH_MODEL,

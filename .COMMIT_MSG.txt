@@ -1,0 +1,3 @@
+Fix interactive flash chain wrap around from last model
+
+This enables wrap-around candidate selection in interactive fallback so a failure on the last flash model can restart from the first model instead of returning null.

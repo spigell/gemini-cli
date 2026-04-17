@@ -40,6 +40,7 @@ export async function handleFallback(
   const { failedPolicy, candidates } = buildFallbackPolicyContext(
     chain,
     failedModel,
+    config.isInteractive(),
   );
 
   const failureKind = classifyFailureKind(error);
