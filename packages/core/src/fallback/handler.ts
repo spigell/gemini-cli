@@ -101,14 +101,6 @@ export async function handleFallback(
       return processIntent(config, 'retry_once_silent', fallbackModel);
     }
 
-    // Interactive mode: keep routing automatic and avoid UI prompt dependency.
-    // This guarantees fallback continues through the chain (including wrap-around)
-    // even when policy action is prompt/terminal.
-    if (config.isInteractive()) {
-      applyAvailabilityTransition(getAvailabilityContext, failureKind);
-      return processIntent(config, 'retry_once_silent', fallbackModel);
-    }
-
     // This will be used in the future when FallbackRecommendation is passed through UI
     const recommendation: FallbackRecommendation = {
       ...selection,
