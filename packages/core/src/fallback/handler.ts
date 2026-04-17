@@ -151,9 +151,8 @@ async function processIntent(
       return true;
 
     case 'retry_once':
-      // For distinct retry (retry_once), we do NOT set the active model permanently.
-      // The FallbackStrategy will handle routing to the available model for this turn
-      // based on the availability service state (which is updated before this).
+      // Ensure the immediate retry uses the selected fallback model.
+      config.activateFallbackMode(fallbackModel);
       return true;
 
     case 'retry_with_credits':
