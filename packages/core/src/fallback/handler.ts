@@ -28,7 +28,15 @@ export async function handleFallback(
   authType?: string,
   error?: unknown,
 ): Promise<string | boolean | null> {
-  const chain = resolvePolicyChain(config);
+  // Keep fallback within a model family chain (flash/pro) and allow wrap-around.
+  // This avoids collapsing to a single concrete model chain after fallback mode
+  // switches active model (e.g. only retrying 2.5 forever).
+  const chainHint = failedModel.includes('flash')
+    ? 'flash'
+    : failedModel.includes('pro')
+      ? 'pro'
+      : failedModel;
+  const chain = resolvePolicyChain(config, chainHint, true);
   const { failedPolicy, candidates } = buildFallbackPolicyContext(
     chain,
     failedModel,
@@ -43,7 +51,7 @@ export async function handleFallback(
 
   let fallbackModel: string;
   if (!candidates.length) {
-    fallbackModel = failedModel;
+    return null;
   } else {
     const selection = availability.selectFirstAvailable(
       candidates.map((policy) => policy.model),
