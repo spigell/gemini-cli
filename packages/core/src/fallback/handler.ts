@@ -71,7 +71,9 @@ export async function handleFallback(
         !selectedPolicy)
     ) {
       availability.reset();
-      selection = availability.selectFirstAvailable(chain.map((p) => p.model));
+      selection = availability.selectFirstAvailable(
+        chain.filter((p) => p.model !== failedModel).map((p) => p.model),
+      );
       lastResortPolicy = chain.find((policy) => policy.isLastResort);
       selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
       selectedPolicy = chain.find(
