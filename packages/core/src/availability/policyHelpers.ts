@@ -73,6 +73,14 @@ export function resolvePolicyChain(
       useCustomTools: useCustomToolModel,
     };
 
+    // Prefer explicit family chains when the configured model is a family alias.
+    if (
+      (configuredModel === 'flash' || configuredModel === 'pro') &&
+      config.modelConfigService.getModelChain(configuredModel)
+    ) {
+      chain = config.modelConfigService.resolveChain(configuredModel, context);
+    }
+
     if (resolvedModel === DEFAULT_GEMINI_FLASH_LITE_MODEL) {
       chain = config.modelConfigService.resolveChain('lite', context);
     } else if (
