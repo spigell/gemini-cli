@@ -53,16 +53,34 @@ export async function handleFallback(
   if (!candidates.length) {
     return null;
   } else {
-    const selection = availability.selectFirstAvailable(
+    let selection = availability.selectFirstAvailable(
       candidates.map((policy) => policy.model),
     );
 
-    const lastResortPolicy = candidates.find((policy) => policy.isLastResort);
-    const selectedFallbackModel =
-      selection.selectedModel ?? lastResortPolicy?.model;
-    const selectedPolicy = candidates.find(
+    let lastResortPolicy = candidates.find((policy) => policy.isLastResort);
+    let selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
+    let selectedPolicy = candidates.find(
       (policy) => policy.model === selectedFallbackModel,
     );
+
+    // Interactive mode only: when the chain is exhausted, restart from the
+    // beginning by clearing availability state and selecting again.
+    if (
+      config.isInteractive() &&
+      (!selectedFallbackModel ||
+        selectedFallbackModel === failedModel ||
+        !selectedPolicy)
+    ) {
+      availability.reset();
+      selection = availability.selectFirstAvailable(
+        candidates.map((policy) => policy.model),
+      );
+      lastResortPolicy = candidates.find((policy) => policy.isLastResort);
+      selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
+      selectedPolicy = candidates.find(
+        (policy) => policy.model === selectedFallbackModel,
+      );
+    }
 
     if (
       !selectedFallbackModel ||
