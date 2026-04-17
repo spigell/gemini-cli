@@ -79,7 +79,7 @@ export async function handleFallback(
 
     if (action === 'silent') {
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
-      return processIntent(config, 'retry_always', fallbackModel);
+      return processIntent(config, 'retry_once_silent', fallbackModel);
     }
 
     // This will be used in the future when FallbackRecommendation is passed through UI
@@ -106,7 +106,11 @@ export async function handleFallback(
     // to the failed model (e.g. marking it terminal if it had a quota error).
     // We DO NOT apply it if the user chose 'stop' or 'retry_later', allowing
     // them to try again later with the same model state.
-    if (intent === 'retry_always' || intent === 'retry_once') {
+    if (
+      intent === 'retry_always' ||
+      intent === 'retry_once' ||
+      intent === 'retry_once_silent'
+    ) {
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
     }
 
@@ -150,6 +154,12 @@ async function processIntent(
       // For distinct retry (retry_once), we do NOT set the active model permanently.
       // The FallbackStrategy will handle routing to the available model for this turn
       // based on the availability service state (which is updated before this).
+      return true;
+
+    case 'retry_once_silent':
+      // Silent one-shot fallback should apply immediately without changing the
+      // configured model for subsequent turns.
+      config.setActiveModel(fallbackModel);
       return true;
 
     case 'retry_with_credits':
