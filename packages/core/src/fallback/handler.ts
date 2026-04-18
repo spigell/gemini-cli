@@ -36,15 +36,28 @@ export async function handleFallback(
     : failedModel.includes('pro')
       ? 'pro'
       : failedModel;
+  const errorSummary = summarizeError(error);
+  debugLogger.warn(
+    `[fallback] Handling fallback for failedModel=${failedModel}, chainHint=${chainHint}, authType=${authType ?? 'unknown'}, interactive=${config.isInteractive()}, error=${errorSummary}`,
+  );
   const chain = resolvePolicyChain(config, chainHint, true);
+  debugLogger.warn(
+    `[fallback] Resolved policy chain for hint=${chainHint}: ${chain.map((policy) => policy.model).join(' -> ')}`,
+  );
   const { failedPolicy, candidates } = buildFallbackPolicyContext(
     chain,
     failedModel,
     config.isInteractive(),
   );
+  debugLogger.warn(
+    `[fallback] Failed policy=${failedPolicy?.model ?? 'none'}, candidates=${candidates.map((policy) => policy.model).join(', ') || 'none'}`,
+  );
 
   const failureKind = classifyFailureKind(error);
   const availability = config.getModelAvailabilityService();
+  debugLogger.warn(
+    `[fallback] Classified failure for model=${failedModel} as kind=${failureKind}`,
+  );
   const getAvailabilityContext = () => {
     if (!failedPolicy) return undefined;
     return { service: availability, policy: failedPolicy };
@@ -54,7 +67,13 @@ export async function handleFallback(
   {
     const candidatePolicies = candidates.length ? candidates : chain;
     const candidateModels = candidatePolicies.map((policy) => policy.model);
+    debugLogger.warn(
+      `[fallback] Selecting from candidate policies for failedModel=${failedModel}: ${candidateModels.join(', ') || 'none'}`,
+    );
     let selection = availability.selectFirstAvailable(candidateModels);
+    debugLogger.warn(
+      `[fallback] Initial selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
+    );
 
     let lastResortPolicy = candidatePolicies.find((policy) => policy.isLastResort);
     let selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
@@ -70,9 +89,18 @@ export async function handleFallback(
         selectedFallbackModel === failedModel ||
         !selectedPolicy)
     ) {
+      const restartCandidates = chain
+        .filter((p) => p.model !== failedModel)
+        .map((p) => p.model);
+      debugLogger.warn(
+        `[fallback] Selection exhausted for failedModel=${failedModel}; resetting availability and restarting from chain candidates=${restartCandidates.join(', ') || 'none'}`,
+      );
       availability.reset();
       selection = availability.selectFirstAvailable(
-        chain.filter((p) => p.model !== failedModel).map((p) => p.model),
+        restartCandidates,
+      );
+      debugLogger.warn(
+        `[fallback] Restart selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
       );
       lastResortPolicy = chain.find((policy) => policy.isLastResort);
       selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
@@ -86,15 +114,27 @@ export async function handleFallback(
       selectedFallbackModel === failedModel ||
       !selectedPolicy
     ) {
+      debugLogger.warn(
+        `[fallback] No valid fallback for failedModel=${failedModel}: selected=${selectedFallbackModel ?? 'none'}, failedPolicy=${failedPolicy?.model ?? 'none'}, lastResort=${lastResortPolicy?.model ?? 'none'}`,
+      );
       return null;
     }
 
     fallbackModel = selectedFallbackModel;
+    debugLogger.warn(
+      `[fallback] Chosen fallback model for failedModel=${failedModel}: fallbackModel=${fallbackModel}, selectedPolicy=${selectedPolicy.model}, lastResort=${selectedPolicy.isLastResort === true}`,
+    );
 
     // failureKind is already declared and calculated above
     const action = resolvePolicyAction(failureKind, selectedPolicy);
+    debugLogger.warn(
+      `[fallback] Resolved action for failedModel=${failedModel} -> fallbackModel=${fallbackModel}: action=${action}, failureKind=${failureKind}`,
+    );
 
     if (action === 'silent') {
+      debugLogger.warn(
+        `[fallback] Applying silent fallback for failedModel=${failedModel} -> fallbackModel=${fallbackModel}`,
+      );
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
       return processIntent(config, 'retry_once_silent', fallbackModel);
     }
@@ -113,11 +153,17 @@ export async function handleFallback(
 
   const handler = config.getFallbackModelHandler();
   if (typeof handler !== 'function') {
+    debugLogger.warn(
+      `[fallback] No fallback handler registered for failedModel=${failedModel}; returning null after selecting fallbackModel=${fallbackModel}`,
+    );
     return null;
   }
 
   try {
     const intent = await handler(failedModel, fallbackModel, error);
+    debugLogger.warn(
+      `[fallback] Handler returned intent for failedModel=${failedModel} -> fallbackModel=${fallbackModel}: intent=${intent ?? 'null'}`,
+    );
 
     // If the user chose to switch/retry, we apply the availability transition
     // to the failed model (e.g. marking it terminal if it had a quota error).
@@ -128,6 +174,9 @@ export async function handleFallback(
       intent === 'retry_once' ||
       intent === 'retry_once_silent'
     ) {
+      debugLogger.warn(
+        `[fallback] Applying availability transition for failedModel=${failedModel} after intent=${intent}`,
+      );
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
     }
 
@@ -160,6 +209,9 @@ async function processIntent(
   intent: FallbackIntent | null,
   fallbackModel: string,
 ): Promise<boolean> {
+  debugLogger.warn(
+    `[fallback] Processing intent=${intent ?? 'null'} with fallbackModel=${fallbackModel}`,
+  );
   switch (intent) {
     case 'retry_always':
       // TODO(telemetry): Implement generic fallback event logging. Existing
@@ -198,4 +250,32 @@ async function processIntent(
         `Unexpected fallback intent received from fallbackModelHandler: "${intent}"`,
       );
   }
+}
+
+function summarizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error === undefined) {
+    return 'undefined';
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function formatSkippedModels(
+  skipped: Array<{ model: string; reason: string }> | undefined,
+): string {
+  if (!skipped?.length) {
+    return 'none';
+  }
+  return skipped
+    .map(({ model, reason }) => `${model}:${reason}`)
+    .join(', ');
 }
