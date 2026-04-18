@@ -513,7 +513,7 @@ export class GeminiChat {
       () => lastModelToUse,
     );
     // Track initial active model to detect fallback changes
-    const initialActiveModel = this.context.config.getActiveModel();
+    let initialActiveModel = this.context.config.getActiveModel();
 
     const apiCall = async () => {
       const useGemini3_1 =
@@ -536,8 +536,9 @@ export class GeminiChat {
       // If the active model has changed (e.g. due to a fallback updating the config),
       // we switch to the new active model.
       if (this.context.config.getActiveModel() !== initialActiveModel) {
+        initialActiveModel = this.context.config.getActiveModel();
         modelToUse = resolveModel(
-          this.context.config.getActiveModel(),
+          initialActiveModel,
           useGemini3_1,
           useGemini3_1FlashLite,
           false,
