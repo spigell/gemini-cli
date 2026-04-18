@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli-devtools",
-  "version": "0.38.1-spigell",
+  "version": "0.38.1-spigell.20260418.2de532564",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/src/index.js",

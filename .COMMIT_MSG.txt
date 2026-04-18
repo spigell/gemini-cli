@@ -1,3 +1,4 @@
-chore(release): v0.38.1-spigell
+chore(release): bump version to 0.38.1-spigell.20260418.2de532564
 
-This commit bumps the version to v0.38.1-spigell across all packages and updates the generated metadata to reflect the new version in `--version` and `/about` outputs.
+Bump version in package.json and workspaces to include date and SHA for release.
+Update sandbox image URI to match the new version.

@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli",
-  "version": "0.38.1-spigell",
+  "version": "0.38.1-spigell.20260418.2de532564",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -14,7 +14,7 @@
     "url": "git+https://github.com/google-gemini/gemini-cli.git"
   },
   "config": {
-    "sandboxImageUri": "us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:0.38.1-spigell"
+    "sandboxImageUri": "us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:0.38.1-spigell.20260418.2de532564"
   },
   "scripts": {
     "start": "cross-env NODE_ENV=development node scripts/start.js",
