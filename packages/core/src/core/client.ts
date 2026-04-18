@@ -35,7 +35,6 @@ import {
   type RetryAvailabilityContext,
 } from '../utils/retry.js';
 import type { ValidationRequiredError } from '../utils/googleQuotaErrors.js';
-import { debugLogger } from '../utils/debugLogger.js';
 import { getErrorMessage, isAbortError } from '../utils/errors.js';
 import { tokenLimit } from './tokenLimits.js';
 import type {
@@ -63,6 +62,7 @@ import {
 import { uiTelemetryService } from '../telemetry/uiTelemetry.js';
 import type { IdeContext, File } from '../ide/types.js';
 import { handleFallback } from '../fallback/handler.js';
+import { fallbackLogger } from '../fallback/fallbackLogger.js';
 import type { RoutingContext } from '../routing/routingStrategy.js';
 import type { ModelConfigKey } from '../services/modelConfigService.js';
 import { ToolOutputMaskingService } from '../context/toolOutputMaskingService.js';
@@ -1091,7 +1091,7 @@ export class GeminiClient {
           abortSignal,
           systemInstruction,
         };
-        debugLogger.warn(
+        fallbackLogger.log(
           `[fallback-caller:client] activeModel=${active}, currentAttemptModel=${currentAttemptModel}, requestModel=${currentAttemptModel}`,
         );
 

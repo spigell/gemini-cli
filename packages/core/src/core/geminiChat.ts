@@ -25,7 +25,6 @@ import {
   getRetryErrorType,
 } from '../utils/retry.js';
 import type { ValidationRequiredError } from '../utils/googleQuotaErrors.js';
-import { debugLogger } from '../utils/debugLogger.js';
 import { resolveModel, supportsModernFeatures } from '../config/models.js';
 import { hasCycleInSchema } from '../tools/tools.js';
 import type { StructuredError } from './turn.js';
@@ -652,7 +651,7 @@ export class GeminiChat {
       lastModelToUse = modelToUse;
       lastConfig = config;
       lastContentsToUse = contentsToUse;
-      debugLogger.warn(
+      fallbackLogger.log(
         `[fallback-caller:chat] activeModel=${this.context.config.getActiveModel()}, lastModelToUse=${lastModelToUse}, requestModel=${modelToUse}`,
       );
 
@@ -1092,4 +1091,6 @@ export function isSchemaDepthError(errorMessage: string): boolean {
 
 export function isInvalidArgumentError(errorMessage: string): boolean {
   return errorMessage.includes('Request contains an invalid argument');
+}
+orMessage.includes('Request contains an invalid argument');
 }
