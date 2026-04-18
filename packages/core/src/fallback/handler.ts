@@ -19,6 +19,7 @@ import {
   resolvePolicyAction,
   applyAvailabilityTransition,
 } from '../availability/policyHelpers.js';
+import { fallbackLogger } from './fallbackLogger.js';
 
 export const UPGRADE_URL_PAGE = 'https://goo.gle/set-up-gemini-code-assist';
 
@@ -28,36 +29,46 @@ export async function handleFallback(
   authType?: string,
   error?: unknown,
 ): Promise<string | boolean | null> {
+  fallbackLogger.startSession(failedModel);
   // Keep fallback within a model family chain (flash/pro) and allow wrap-around.
   // This avoids collapsing to a single concrete model chain after fallback mode
   // switches active model (e.g. only retrying 2.5 forever).
   const chainHint = failedModel.includes('flash')
     ? 'flash'
     : failedModel.includes('pro')
-      ? 'pro'
-      : failedModel;
+    ? 'pro'
+    : failedModel;
   const errorSummary = summarizeError(error);
-  debugLogger.warn(
-    `[fallback] Handling fallback for failedModel=${failedModel}, chainHint=${chainHint}, authType=${authType ?? 'unknown'}, interactive=${config.isInteractive()}, error=${errorSummary}`,
-  );
+  fallbackLogger.group('Fallback context', [
+    ['chainHint', chainHint],
+    ['authType', authType ?? 'unknown'],
+    ['interactive', config.isInteractive()],
+    ['error', errorSummary],
+  ]);
   const chain = resolvePolicyChain(config, chainHint, true);
-  debugLogger.warn(
-    `[fallback] Resolved policy chain for hint=${chainHint}: ${chain.map((policy) => policy.model).join(' -> ')}`,
-  );
+  fallbackLogger.group('Policy chain', [
+    ['hint', chainHint],
+    [
+      'chain',
+      chain.map((policy) => policy.model).join(' -> '),
+    ],
+  ]);
   const { failedPolicy, candidates } = buildFallbackPolicyContext(
     chain,
     failedModel,
     config.isInteractive(),
   );
-  debugLogger.warn(
-    `[fallback] Failed policy=${failedPolicy?.model ?? 'none'}, candidates=${candidates.map((policy) => policy.model).join(', ') || 'none'}`,
-  );
+  fallbackLogger.group('Fallback candidates', [
+    ['failedPolicy', failedPolicy?.model ?? 'none'],
+    [
+      'candidates',
+      candidates.map((policy) => policy.model).join(', ') || 'none',
+    ],
+  ]);
 
   const failureKind = classifyFailureKind(error);
   const availability = config.getModelAvailabilityService();
-  debugLogger.warn(
-    `[fallback] Classified failure for model=${failedModel} as kind=${failureKind}`,
-  );
+  fallbackLogger.log(`Classified failure for model=${failedModel} as kind=${failureKind}`);
   const getAvailabilityContext = () => {
     if (!failedPolicy) return undefined;
     return { service: availability, policy: failedPolicy };
@@ -67,13 +78,14 @@ export async function handleFallback(
   {
     const candidatePolicies = candidates.length ? candidates : chain;
     const candidateModels = candidatePolicies.map((policy) => policy.model);
-    debugLogger.warn(
-      `[fallback] Selecting from candidate policies for failedModel=${failedModel}: ${candidateModels.join(', ') || 'none'}`,
+    fallbackLogger.log(
+      `Selecting from candidate policies: ${candidateModels.join(', ') || 'none'}`,
     );
     let selection = availability.selectFirstAvailable(candidateModels);
-    debugLogger.warn(
-      `[fallback] Initial selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
-    );
+    fallbackLogger.group('Initial selection result', [
+      ['selected', selection.selectedModel ?? 'none'],
+      ['skipped', formatSkippedModels(selection.skipped)],
+    ]);
 
     const logLastResortPolicy =
       candidatePolicies.find((policy) => policy.isLastResort) ??
@@ -94,14 +106,15 @@ export async function handleFallback(
       const restartCandidates = chain
         .filter((p) => p.model !== failedModel)
         .map((p) => p.model);
-      debugLogger.warn(
-        `[fallback] Selection exhausted for failedModel=${failedModel}; resetting availability and restarting from chain candidates=${restartCandidates.join(', ') || 'none'}`,
+      fallbackLogger.log(
+        `Selection exhausted; resetting availability and restarting from chain candidates=${restartCandidates.join(', ') || 'none'}`,
       );
       availability.reset();
       selection = availability.selectFirstAvailable(restartCandidates);
-      debugLogger.warn(
-        `[fallback] Restart selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
-      );
+      fallbackLogger.group('Restart selection result', [
+        ['selected', selection.selectedModel ?? 'none'],
+        ['skipped', formatSkippedModels(selection.skipped)],
+      ]);
       selectedFallbackModel = selection.selectedModel;
       selectedPolicy = chain.find(
         (policy) => policy.model === selectedFallbackModel,
@@ -113,27 +126,27 @@ export async function handleFallback(
       selectedFallbackModel === failedModel ||
       !selectedPolicy
     ) {
-      debugLogger.warn(
-        `[fallback] No valid fallback for failedModel=${failedModel}: selected=${selectedFallbackModel ?? 'none'}, failedPolicy=${failedPolicy?.model ?? 'none'}, lastResort=${logLastResortPolicy?.model ?? 'none'}`,
+      fallbackLogger.log(
+        `No valid fallback: selected=${selectedFallbackModel ?? 'none'}, failedPolicy=${failedPolicy?.model ?? 'none'}, lastResort=${logLastResortPolicy?.model ?? 'none'}`,
       );
       return null;
     }
 
     fallbackModel = selectedFallbackModel;
-    debugLogger.warn(
-      `[fallback] Chosen fallback model for failedModel=${failedModel}: fallbackModel=${fallbackModel}, selectedPolicy=${selectedPolicy.model}, lastResort=${selectedPolicy.isLastResort === true}`,
-    );
+    fallbackLogger.group('Chosen fallback model', [
+      ['fallbackModel', fallbackModel],
+      ['selectedPolicy', selectedPolicy.model],
+      ['lastResort', selectedPolicy.isLastResort === true],
+    ]);
 
     // failureKind is already declared and calculated above
     const action = resolvePolicyAction(failureKind, selectedPolicy);
-    debugLogger.warn(
-      `[fallback] Resolved action for failedModel=${failedModel} -> fallbackModel=${fallbackModel}: action=${action}, failureKind=${failureKind}`,
+    fallbackLogger.log(
+      `Resolved action for ${failedModel} -> ${fallbackModel}: action=${action}, failureKind=${failureKind}`,
     );
 
     if (action === 'silent') {
-      debugLogger.warn(
-        `[fallback] Applying silent fallback for failedModel=${failedModel} -> fallbackModel=${fallbackModel}`,
-      );
+      fallbackLogger.log(`Applying silent fallback for ${failedModel} -> ${fallbackModel}`);
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
       return processIntent(config, 'retry_once_silent', fallbackModel);
     }
@@ -152,16 +165,16 @@ export async function handleFallback(
 
   const handler = config.getFallbackModelHandler();
   if (typeof handler !== 'function') {
-    debugLogger.warn(
-      `[fallback] No fallback handler registered for failedModel=${failedModel}; returning null after selecting fallbackModel=${fallbackModel}`,
+    fallbackLogger.log(
+      `No fallback handler registered; returning null after selecting fallbackModel=${fallbackModel}`,
     );
     return null;
   }
 
   try {
     const intent = await handler(failedModel, fallbackModel, error);
-    debugLogger.warn(
-      `[fallback] Handler returned intent for failedModel=${failedModel} -> fallbackModel=${fallbackModel}: intent=${intent ?? 'null'}`,
+    fallbackLogger.log(
+      `Handler returned intent for ${failedModel} -> ${fallbackModel}: intent=${intent ?? 'null'}`,
     );
 
     // If the user chose to switch/retry, we apply the availability transition
@@ -173,8 +186,8 @@ export async function handleFallback(
       intent === 'retry_once' ||
       intent === 'retry_once_silent'
     ) {
-      debugLogger.warn(
-        `[fallback] Applying availability transition for failedModel=${failedModel} after intent=${intent}`,
+      fallbackLogger.log(
+        `Applying availability transition for failedModel=${failedModel} after intent=${intent}`,
       );
       applyAvailabilityTransition(getAvailabilityContext, failureKind);
     }
@@ -208,8 +221,8 @@ async function processIntent(
   intent: FallbackIntent | null,
   fallbackModel: string,
 ): Promise<boolean> {
-  debugLogger.warn(
-    `[fallback] Processing intent=${intent ?? 'null'} with fallbackModel=${fallbackModel}`,
+  fallbackLogger.log(
+    `Processing intent=${intent ?? 'null'} with fallbackModel=${fallbackModel}`,
   );
   switch (intent) {
     case 'retry_always':

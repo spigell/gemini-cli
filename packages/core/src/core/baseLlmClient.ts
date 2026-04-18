@@ -15,9 +15,9 @@ import type {
 import type { Config } from '../config/config.js';
 import type { ContentGenerator, AuthType } from './contentGenerator.js';
 import { handleFallback } from '../fallback/handler.js';
+import { fallbackLogger } from '../fallback/fallbackLogger.js';
 import { getResponseText } from '../utils/partUtils.js';
 import { reportError } from '../utils/errorReporting.js';
-import { debugLogger } from '../utils/debugLogger.js';
 import { getErrorMessage } from '../utils/errors.js';
 import {
   logMalformedJsonResponse,
@@ -319,7 +319,7 @@ export class BaseLlmClient {
           config: finalConfig,
           contents,
         };
-        debugLogger.warn(
+        fallbackLogger.log(
           `[fallback-caller:base] activeModel=${activeModel}, currentModel=${currentModel}, requestModel=${requestParams.model}`,
         );
         return this.contentGenerator.generateContent(
