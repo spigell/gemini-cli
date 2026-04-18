@@ -1,0 +1,3 @@
+chore(release): v0.38.1-spigell
+
+This commit bumps the version to v0.38.1-spigell across all packages and updates the generated metadata to reflect the new version in `--version` and `/about` outputs.

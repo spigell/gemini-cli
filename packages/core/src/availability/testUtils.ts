@@ -23,6 +23,7 @@ export function createAvailabilityServiceMock(
     consumeStickyAttempt: vi.fn(),
     snapshot: vi.fn(),
     resetTurn: vi.fn(),
+    reset: vi.fn(),
     selectFirstAvailable: vi.fn().mockReturnValue(selection),
   };
 
