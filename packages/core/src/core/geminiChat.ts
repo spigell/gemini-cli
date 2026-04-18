@@ -650,6 +650,9 @@ export class GeminiChat {
       lastModelToUse = modelToUse;
       lastConfig = config;
       lastContentsToUse = contentsToUse;
+      debugLogger.warn(
+        `[fallback-caller:chat] activeModel=${this.context.config.getActiveModel()}, lastModelToUse=${lastModelToUse}, requestModel=${modelToUse}`,
+      );
 
       return this.context.config.getContentGenerator().generateContentStream(
         {

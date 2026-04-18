@@ -75,8 +75,10 @@ export async function handleFallback(
       `[fallback] Initial selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
     );
 
-    let lastResortPolicy = candidatePolicies.find((policy) => policy.isLastResort);
-    let selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
+    const logLastResortPolicy =
+      candidatePolicies.find((policy) => policy.isLastResort) ??
+      chain.find((policy) => policy.isLastResort);
+    let selectedFallbackModel = selection.selectedModel;
     let selectedPolicy = candidatePolicies.find(
       (policy) => policy.model === selectedFallbackModel,
     );
@@ -96,14 +98,11 @@ export async function handleFallback(
         `[fallback] Selection exhausted for failedModel=${failedModel}; resetting availability and restarting from chain candidates=${restartCandidates.join(', ') || 'none'}`,
       );
       availability.reset();
-      selection = availability.selectFirstAvailable(
-        restartCandidates,
-      );
+      selection = availability.selectFirstAvailable(restartCandidates);
       debugLogger.warn(
         `[fallback] Restart selection result for failedModel=${failedModel}: selected=${selection.selectedModel ?? 'none'}, skipped=${formatSkippedModels(selection.skipped)}`,
       );
-      lastResortPolicy = chain.find((policy) => policy.isLastResort);
-      selectedFallbackModel = selection.selectedModel ?? lastResortPolicy?.model;
+      selectedFallbackModel = selection.selectedModel;
       selectedPolicy = chain.find(
         (policy) => policy.model === selectedFallbackModel,
       );
@@ -115,7 +114,7 @@ export async function handleFallback(
       !selectedPolicy
     ) {
       debugLogger.warn(
-        `[fallback] No valid fallback for failedModel=${failedModel}: selected=${selectedFallbackModel ?? 'none'}, failedPolicy=${failedPolicy?.model ?? 'none'}, lastResort=${lastResortPolicy?.model ?? 'none'}`,
+        `[fallback] No valid fallback for failedModel=${failedModel}: selected=${selectedFallbackModel ?? 'none'}, failedPolicy=${failedPolicy?.model ?? 'none'}, lastResort=${logLastResortPolicy?.model ?? 'none'}`,
       );
       return null;
     }

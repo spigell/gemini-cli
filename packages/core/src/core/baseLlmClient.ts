@@ -318,6 +318,9 @@ export class BaseLlmClient {
           config: finalConfig,
           contents,
         };
+        debugLogger.warn(
+          `[fallback-caller:base] activeModel=${activeModel}, currentModel=${currentModel}, requestModel=${requestParams.model}`,
+        );
         return this.contentGenerator.generateContent(
           requestParams,
           promptId,

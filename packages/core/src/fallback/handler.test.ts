@@ -341,29 +341,63 @@ describe('handleFallback', () => {
       );
     });
 
-    it('Call the handler with fallback model same as the failed model when the failed model is the last-resort policy', async () => {
-      // Ensure short-circuit when wrapping to an unavailable upstream model.
+    it('resets availability and reselects on interactive exhaustion instead of forcing an unavailable last-resort model', async () => {
+      const previewPro = createDefaultPolicy('gemini-3.1-pro-preview');
+      previewPro.actions = {
+        ...previewPro.actions,
+        terminal: 'silent',
+      };
+      const fallbackPro = createDefaultPolicy('gemini-2.5-pro', {
+        isLastResort: true,
+      });
+      fallbackPro.actions = {
+        ...fallbackPro.actions,
+        terminal: 'silent',
+      };
+      const proChain = [previewPro, fallbackPro];
+      const chainSpy = vi
+        .spyOn(policyHelpers, 'resolvePolicyChain')
+        .mockReturnValue(proChain);
+
+      vi.mocked(policyConfig.isInteractive).mockReturnValue(true);
       availability.selectFirstAvailable = vi
         .fn()
-        .mockReturnValue({ selectedModel: null, skipped: [] });
-      vi.mocked(policyConfig.getModel).mockReturnValue(
-        DEFAULT_GEMINI_MODEL_AUTO,
-      );
+        .mockReturnValueOnce({
+          selectedModel: null,
+          skipped: [{ model: 'gemini-2.5-pro', reason: 'quota' }],
+        })
+        .mockReturnValueOnce({
+          selectedModel: 'gemini-2.5-pro',
+          skipped: [],
+        });
 
-      const result = await handleFallback(
-        policyConfig,
-        DEFAULT_GEMINI_FLASH_MODEL,
-        AUTH_OAUTH,
-      );
+      try {
+        const result = await handleFallback(
+          policyConfig,
+          'gemini-3.1-pro-preview',
+          AUTH_OAUTH,
+          new TerminalQuotaError('Quota exhausted', {
+            code: 429,
+            message: 'quota',
+            details: [],
+          }),
+        );
 
-      policyHandler.mockResolvedValue('retry_once');
-
-      expect(result).not.toBeNull();
-      expect(policyHandler).toHaveBeenCalledWith(
-        DEFAULT_GEMINI_FLASH_MODEL,
-        DEFAULT_GEMINI_FLASH_MODEL,
-        undefined,
-      );
+        expect(result).toBe(true);
+        expect(availability.reset).toHaveBeenCalledTimes(1);
+        expect(availability.selectFirstAvailable).toHaveBeenNthCalledWith(1, [
+          'gemini-2.5-pro',
+        ]);
+        expect(availability.selectFirstAvailable).toHaveBeenNthCalledWith(2, [
+          'gemini-2.5-pro',
+        ]);
+        expect(policyConfig.setActiveModel).toHaveBeenCalledWith(
+          'gemini-2.5-pro',
+        );
+        expect(policyHandler).not.toHaveBeenCalled();
+      } finally {
+        chainSpy.mockRestore();
+      }
     });
 
     it('calls activateFallbackMode when handler returns "retry_always"', async () => {

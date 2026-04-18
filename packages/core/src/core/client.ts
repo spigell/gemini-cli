@@ -1091,6 +1091,9 @@ export class GeminiClient {
           abortSignal,
           systemInstruction,
         };
+        debugLogger.warn(
+          `[fallback-caller:client] activeModel=${active}, currentAttemptModel=${currentAttemptModel}, requestModel=${currentAttemptModel}`,
+        );
 
         return this.getContentGeneratorOrFail().generateContent(
           {
