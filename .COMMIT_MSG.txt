@@ -1,0 +1,10 @@
+fix(core): improve fallback logging and interactive restart
+
+This commit refactors the fallback logging mechanism to use a new `FallbackLogger` class for more structured and readable output. It also ensures that interactive sessions reset availability state when fallback chains are exhausted, preventing models from getting stuck.
+
+Specifically:
+- Introduced `FallbackLogger` singleton to group related fallback logs.
+- Updated `handleFallback` and model callers in `baseLlmClient.ts`, `client.ts`, and `geminiChat.ts` to use the new logger.
+- Changed logging level to `info`.
+- Fixed an issue where interactive sessions could get stuck on an unavailable model after exhausting the fallback chain.
+- Removed unused `debugLogger` imports to fix build errors.
