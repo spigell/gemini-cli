@@ -38,6 +38,7 @@ import {
   ChatRecordingService,
   type ResumedSessionData,
 } from '../services/chatRecordingService.js';
+import { fallbackLogger } from '../fallback/fallbackLogger.js';
 import {
   ContentRetryEvent,
   ContentRetryFailureEvent,
