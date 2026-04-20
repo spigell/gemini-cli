@@ -31,8 +31,10 @@ import { WorkspaceContext } from '../utils/workspaceContext.js';
 import {
   connectToMcpServer,
   createTransport,
+  discoverTools,
   hasNetworkTransport,
   isEnabled,
+  MCPServerStatus,
   McpClient,
   populateMcpServerCommand,
   type McpContext,
@@ -1728,6 +1730,99 @@ describe('mcp-client', () => {
       // Verify the signal passed was not aborted (happy path)
       const signal = onContextUpdatedSpy.mock.calls[0][0];
       expect(signal.aborted).toBe(false);
+    });
+
+    it('should retry MCP tool call once after a session reset error', async () => {
+      const staleSessionError = new Error('Session not found');
+      const initialSdkClient = {
+        getServerCapabilities: vi.fn().mockReturnValue({ tools: {} }),
+        listTools: vi.fn().mockResolvedValue({
+          tools: [
+            {
+              name: 'recoverable_tool',
+              inputSchema: { type: 'object', properties: {} },
+            },
+          ],
+        }),
+        callTool: vi.fn().mockRejectedValueOnce(staleSessionError),
+      };
+
+      const recoveredSdkClient = {
+        callTool: vi.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'recovered' }],
+        }),
+      };
+
+      const mcpWrapper = {
+        ensureConnected: vi
+          .fn()
+          .mockResolvedValueOnce(initialSdkClient)
+          .mockResolvedValueOnce(recoveredSdkClient),
+        invalidateConnection: vi.fn(),
+        getServerName: vi.fn().mockReturnValue('test-server'),
+      };
+
+      const tools = await discoverTools(
+        'test-server',
+        { command: 'test-command' },
+        initialSdkClient as unknown as ClientLib.Client,
+        MOCK_CONTEXT,
+        undefined as unknown as ToolRegistry['messageBus'],
+        {
+          mcpClientWrapper: mcpWrapper as unknown as McpClient,
+        },
+      );
+
+      const result = await tools[0].build({}).execute(new AbortController().signal);
+
+      expect(mcpWrapper.invalidateConnection).toHaveBeenCalledTimes(1);
+      expect(mcpWrapper.ensureConnected).toHaveBeenCalledTimes(2);
+      expect(initialSdkClient.callTool).toHaveBeenCalledTimes(1);
+      expect(recoveredSdkClient.callTool).toHaveBeenCalledTimes(1);
+      expect(result.error).toBeUndefined();
+      expect(result.llmContent).toEqual([{ text: 'recovered' }]);
+    });
+
+    it('should coalesce concurrent ensureConnected calls into one reconnect', async () => {
+      const client = new McpClient(
+        'test-server',
+        { command: 'test-command' },
+        workspaceContext,
+        MOCK_CONTEXT,
+        false,
+        '0.0.1',
+      );
+
+      const reconnectedSdkClient = { close: vi.fn() };
+      const connectSpy = vi.spyOn(client, 'connect').mockImplementation(
+        async () => {
+          (client as unknown as { client: unknown }).client = reconnectedSdkClient;
+          (client as unknown as { status: MCPServerStatus }).status =
+            MCPServerStatus.CONNECTED;
+        },
+      );
+      const discoverIntoSpy = vi
+        .spyOn(client, 'discoverInto')
+        .mockResolvedValue(undefined);
+
+      (client as unknown as { registeredRegistries: Set<unknown> })
+        .registeredRegistries.add({
+          toolRegistry: {} as ToolRegistry,
+          promptRegistry: {} as PromptRegistry,
+          resourceRegistry: {} as ResourceRegistry,
+        });
+
+      const [connectedA, connectedB, connectedC] = await Promise.all([
+        client.ensureConnected(),
+        client.ensureConnected(),
+        client.ensureConnected(),
+      ]);
+
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+      expect(discoverIntoSpy).toHaveBeenCalledTimes(1);
+      expect(connectedA).toBe(reconnectedSdkClient);
+      expect(connectedB).toBe(reconnectedSdkClient);
+      expect(connectedC).toBe(reconnectedSdkClient);
     });
   });
 
