@@ -146,6 +146,7 @@ export class McpClient implements McpProgressReporter {
   private client: Client | undefined;
   private transport: Transport | undefined;
   private status: MCPServerStatus = MCPServerStatus.DISCONNECTED;
+  private reconnectPromise: Promise<Client> | null = null;
   private isRefreshingTools: boolean = false;
   private pendingToolRefresh: boolean = false;
   private isRefreshingResources: boolean = false;
@@ -305,6 +306,55 @@ export class McpClient implements McpProgressReporter {
     return this.status;
   }
 
+  async ensureConnected(): Promise<Client> {
+    if (this.status === MCPServerStatus.CONNECTED && this.client) {
+      return this.client;
+    }
+
+    if (this.reconnectPromise) {
+      return this.reconnectPromise;
+    }
+
+    this.reconnectPromise = (async () => {
+      try {
+        const staleClient = this.client;
+        this.client = undefined;
+
+        if (this.transport) {
+          await this.transport.close();
+          this.transport = undefined;
+        }
+        if (staleClient) {
+          await staleClient.close();
+        }
+        this.updateStatus(MCPServerStatus.DISCONNECTED);
+
+        await this.connect();
+
+        const refreshedClient = this.client;
+        if (!refreshedClient) {
+          throw new Error(
+            `MCP client '${this.serverName}' failed to reconnect`,
+          );
+        }
+
+        const currentRegistries = Array.from(this.registeredRegistries);
+        for (const registries of currentRegistries) {
+          await this.discoverInto(this.cliConfig, registries);
+        }
+        return refreshedClient;
+      } finally {
+        this.reconnectPromise = null;
+      }
+    })();
+
+    return this.reconnectPromise;
+  }
+
+  invalidateConnection(): void {
+    this.updateStatus(MCPServerStatus.DISCONNECTED);
+  }
+
   private updateStatus(status: MCPServerStatus): void {
     this.status = status;
     updateMCPServerStatus(this.serverName, status);
@@ -335,6 +385,7 @@ export class McpClient implements McpProgressReporter {
           timeout: this.serverConfig.timeout ?? MCP_DEFAULT_TIMEOUT_MSEC,
         }),
         progressReporter: this,
+        mcpClientWrapper: this,
       },
     );
   }
@@ -1276,6 +1327,7 @@ export async function discoverTools(
     timeout?: number;
     signal?: AbortSignal;
     progressReporter?: McpProgressReporter;
+    mcpClientWrapper?: McpClient;
   },
 ): Promise<DiscoveredMCPTool[]> {
   try {
@@ -1295,6 +1347,7 @@ export async function discoverTools(
           toolDef,
           mcpServerConfig.timeout ?? MCP_DEFAULT_TIMEOUT_MSEC,
           options?.progressReporter,
+          options?.mcpClientWrapper,
         );
 
         // Extract annotations from the tool definition
@@ -1349,12 +1402,27 @@ export async function discoverTools(
   }
 }
 
+function isRecoverableMcpSessionError(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === 'ECONNRESET') {
+      return true;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes('Session not found') || message.includes('ECONNRESET')
+  );
+}
+
 class McpCallableTool implements CallableTool {
   constructor(
-    private readonly client: Client,
+    private client: Client,
     private readonly toolDef: McpTool,
     private readonly timeout: number,
     private readonly progressReporter?: McpProgressReporter,
+    private readonly mcpClientWrapper?: McpClient,
   ) {}
 
   async tool(): Promise<Tool> {
@@ -1385,35 +1453,73 @@ class McpCallableTool implements CallableTool {
       );
     }
 
+    let retries = 1;
     try {
-      const result = await this.client.callTool(
-        {
-          name: call.name!,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          arguments: call.args as Record<string, unknown>,
-          _meta: { progressToken },
-        },
-        undefined,
-        { timeout: this.timeout },
-      );
+      while (retries >= 0) {
+        try {
+          if (this.mcpClientWrapper) {
+            this.client = await this.mcpClientWrapper.ensureConnected();
+          }
 
-      return [
-        {
-          functionResponse: {
-            name: call.name,
-            response: result,
-          },
-        },
-      ];
-    } catch (error) {
-      // Return error in the format expected by DiscoveredMCPTool
+          const result = await this.client.callTool(
+            {
+              name: call.name!,
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+              arguments: call.args as Record<string, unknown>,
+              _meta: { progressToken },
+            },
+            undefined,
+            { timeout: this.timeout },
+          );
+
+          return [
+            {
+              functionResponse: {
+                name: call.name,
+                response: result,
+              },
+            },
+          ];
+        } catch (error) {
+          if (
+            this.mcpClientWrapper &&
+            retries > 0 &&
+            isRecoverableMcpSessionError(error)
+          ) {
+            debugLogger.warn(
+              `MCP tool call '${call.name}' failed due to a stale session on '${this.mcpClientWrapper.getServerName()}'. Retrying once after reconnect.`,
+            );
+            this.mcpClientWrapper.invalidateConnection();
+            retries--;
+            continue;
+          }
+
+          // Return error in the format expected by DiscoveredMCPTool
+          return [
+            {
+              functionResponse: {
+                name: call.name,
+                response: {
+                  error: {
+                    message:
+                      error instanceof Error ? error.message : String(error),
+                    isError: true,
+                  },
+                },
+              },
+            },
+          ];
+        }
+      }
+
+      // This path is not expected because we always return within the loop.
       return [
         {
           functionResponse: {
             name: call.name,
             response: {
               error: {
-                message: error instanceof Error ? error.message : String(error),
+                message: `MCP tool call '${call.name}' failed after retry.`,
                 isError: true,
               },
             },

@@ -74,6 +74,7 @@ import {
 import { getDisplayString, resolveModel } from '../config/models.js';
 import { partToString } from '../utils/partUtils.js';
 import { coreEvents, CoreEvent } from '../utils/events.js';
+import { debugLogger } from '../utils/debugLogger.js';
 
 const MAX_TURNS = 100;
 
