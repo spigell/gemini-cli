@@ -1,4 +1,0 @@
-chore(release): bump version to 0.38.1-spigell.20260418.2de532564
-
-Bump version in package.json and workspaces to include date and SHA for release.
-Update sandbox image URI to match the new version.
