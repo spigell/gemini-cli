@@ -314,8 +314,8 @@ Hooks such as `BeforeTool` or `AfterTool` can be configured to intercept the
 > [!WARNING] When hooks are triggered by **tool executions**, they do **not**
 > run when you manually toggle Plan Mode using the `/plan` command or the
 > `Shift+Tab` keyboard shortcut. If you need hooks to execute on mode changes,
-> ensure the transition is initiated by the agent (e.g., by asking "start a plan
-> for...").
+> ensure the transition is initiated by the agent (for example, by asking "start
+> a plan for...").
 
 #### Example: Archive approved plans to GCS (`AfterTool`)
 
@@ -327,8 +327,11 @@ Storage whenever Gemini CLI exits Plan Mode to start the implementation.
 
 ```bash
 #!/usr/bin/env bash
-# Extract the plan path from the tool input JSON
-plan_path=$(jq -r '.tool_input.plan_path // empty')
+# Extract the plan filename from the tool input JSON
+plan_filename=$(jq -r '.tool_input.plan_filename // empty')
+
+# Construct the absolute path using the GEMINI_PLANS_DIR environment variable
+plan_path="$GEMINI_PLANS_DIR/$plan_filename"
 
 if [ -f "$plan_path" ]; then
   # Generate a unique filename using a timestamp
@@ -354,7 +357,7 @@ To register this `AfterTool` hook, add it to your `settings.json`:
           {
             "name": "archive-plan",
             "type": "command",
-            "command": "./.gemini/hooks/archive-plan.sh"
+            "command": "~/.gemini/hooks/archive-plan.sh"
           }
         ]
       }
