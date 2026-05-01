@@ -12,6 +12,10 @@ description: >-
 Upgrade this fork to a target upstream release tag (for example `v0.40.0`) and
 carry forward fork-specific behavior safely and repeatably.
 
+Important: bump the fork from upstream, but do not apply fork patches back onto
+the upstream release branch itself. Keep fork-specific changes isolated to the
+fork resync branch and re-apply them only in the fork context.
+
 ## Inputs
 
 - `target_tag`: Upstream release tag to sync to (required), for example
@@ -46,6 +50,8 @@ carry forward fork-specific behavior safely and repeatably.
    - Release/version metadata updates.
    - Temporary or accidental files (must not be carried).
 3. Build a replay list with commit SHAs or file-scoped patch groups.
+4. Treat the upstream tag as the base release to bump from, not a place to
+   merge fork patches into.
 
 ## Step 3: Replay Patches onto Target Release
 
