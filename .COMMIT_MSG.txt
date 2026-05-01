@@ -1,0 +1,3 @@
+Merge upstream v0.40.0 into fork update branch
+
+Align the branch history with fork main by merging upstream v0.40.0, resolving conflicts toward upstream where broad churn occurred, and keeping fork versioning plus fallback test compatibility.
