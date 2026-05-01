@@ -107,6 +107,22 @@ When failures occur:
    - Known residual risks, if any.
 3. If requested, request developer review.
 
+## Step 8: Trigger Image Build (Optional)
+
+If the fork update requires a new container image, trigger the
+`google-gemini-publish.yaml` workflow in the `spigell/my-images` repository on
+the `main` branch.
+
+1. Use the GitHub Actions trigger tool, such as
+   `mcp_github-mcp_actions_run_trigger` or `gh workflow run`.
+2. Pass exactly two inputs to the workflow:
+   - `gemini_cli_git_ref`: the name of the newly pushed branch, for example
+     `spigell/chore/update-to-0.40.0`.
+   - `gemini_cli_version`: the newly generated version string from
+     `package.json`, for example `0.40.0-spigell.20260501.3d5bdc052`.
+3. Critical warning: the `gemini_cli_version` input must always receive the
+   exact version string. Never pass the branch name to the version input.
+
 ## Output Contract
 
 Always report:

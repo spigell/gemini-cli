@@ -1,0 +1,3 @@
+Add optional image build trigger to fork resync skill
+
+Document the final workflow trigger step for cases where a new container image is required, including the exact workflow name and inputs, and warn against passing the branch name as the version.
