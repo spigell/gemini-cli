@@ -12,6 +12,10 @@ description: >-
 Upgrade this fork to a target upstream release tag (for example `v0.40.0`) and
 carry forward fork-specific behavior safely and repeatably.
 
+Important: bump the fork from upstream, but do not apply fork patches back onto
+the upstream release branch itself. Keep fork-specific changes isolated to the
+fork resync branch and re-apply them only in the fork context.
+
 ## Inputs
 
 - `target_tag`: Upstream release tag to sync to (required), for example
@@ -46,6 +50,8 @@ carry forward fork-specific behavior safely and repeatably.
    - Release/version metadata updates.
    - Temporary or accidental files (must not be carried).
 3. Build a replay list with commit SHAs or file-scoped patch groups.
+4. Treat the upstream tag as the base release to bump from, not a place to
+   merge fork patches into.
 
 ## Step 3: Replay Patches onto Target Release
 
@@ -106,6 +112,22 @@ When failures occur:
    - Validation commands run and results.
    - Known residual risks, if any.
 3. If requested, request developer review.
+
+## Step 8: Trigger Image Build (Optional)
+
+If the fork update requires a new container image, trigger the
+`google-gemini-publish.yaml` workflow in the `spigell/my-images` repository on
+the `main` branch.
+
+1. Use the GitHub Actions trigger tool, such as
+   `mcp_github-mcp_actions_run_trigger` or `gh workflow run`.
+2. Pass exactly two inputs to the workflow:
+   - `gemini_cli_git_ref`: the name of the newly pushed branch, for example
+     `spigell/chore/update-to-0.40.0`.
+   - `gemini_cli_version`: the newly generated version string from
+     `package.json`, for example `0.40.0-spigell.20260501.3d5bdc052`.
+3. Critical warning: the `gemini_cli_version` input must always receive the
+   exact version string. Never pass the branch name to the version input.
 
 ## Output Contract
 
