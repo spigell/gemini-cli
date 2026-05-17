@@ -29,7 +29,7 @@ fork resync branch and re-apply them only in the fork context.
 ## Required Safety Rules
 
 - Use `git-mcp` for all git operations.
-- Always run git with full path: `git -C /project/my-shared-infra/my-gemini-cli ...`
+- Always run git with full path: `git -C /spigell-reforge-ai/my-shared-infra/my-gemini-cli ...`
 - Do not rewrite remotes.
 - Do not use destructive git commands unless explicitly requested.
 - Preserve unrelated existing work; do not revert user changes.
