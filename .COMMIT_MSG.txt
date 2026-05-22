@@ -1,3 +1,0 @@
-Clarify fork bump behavior in resync skill
-
-Document that the fork should be bumped from upstream without applying fork patches back onto the upstream release branch, keeping fork-specific changes isolated to the fork resync workflow.
