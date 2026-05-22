@@ -69,3 +69,5 @@ temp_agents/
 # conductor extension and planning directories
 conductor/
 .COMMIT_MSG.txt
+
+.antigravitycli/
